@@ -94,7 +94,6 @@ export default function App() {
         { type: 'image/png' }
       );
 
-      // 第一步：先上传到飞书，获取 file token
       const tokens = await bitable.base.batchUploadFile([file]);
 
       if (!tokens || !tokens[0]) {
@@ -110,8 +109,7 @@ export default function App() {
       const posterField =
         await table.getFieldByName('海报图');
 
-      // 第二步：把附件信息写回当前记录
-      const success = await posterField.setValue(
+      await posterField.setValue(
         recordId,
         [
           {
@@ -124,13 +122,8 @@ export default function App() {
         ]
       );
 
-      if (success === false) {
-        setMessage('附件写入失败');
-        return;
-      }
-
       setMessage(
-        `✅ ${employeeName} 的海报已生成并写入「海报图」`
+        `✅ ${employeeName} 的海报已写入「海报图」`
       );
 
     } catch (error) {
@@ -142,7 +135,7 @@ export default function App() {
           : String(error);
 
       setMessage(
-        `海报生成成功，但写入多维表失败：${errorMessage}`
+        `❌ 写回失败：${errorMessage}`
       );
     }
   };
@@ -203,6 +196,50 @@ export default function App() {
     }
   };
 
+  const testWrite = async () => {
+    try {
+      setMessage('正在测试写入...');
+
+      const selection =
+        await bitable.base.getSelection();
+
+      if (
+        !selection.tableId ||
+        !selection.recordId
+      ) {
+        setMessage('请先选中一条记录');
+        return;
+      }
+
+      const table =
+        await bitable.base.getTableById(
+          selection.tableId
+        );
+
+      const testField =
+        await table.getFieldByName('测试状态');
+
+      await testField.setValue(
+        selection.recordId,
+        'OK'
+      );
+
+      setMessage('✅ 测试写入成功');
+
+    } catch (error) {
+      console.error('测试写入失败：', error);
+
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : String(error);
+
+      setMessage(
+        `❌ 测试写入失败：${errorMessage}`
+      );
+    }
+  };
+
   const handleGenerate = () => {
     const employeeName = name.trim();
 
@@ -234,6 +271,13 @@ export default function App() {
           onClick={readCurrentName}
         >
           读取当前行并生成海报
+        </button>
+
+        <button
+          className="button"
+          onClick={testWrite}
+        >
+          测试写入
         </button>
 
         <button
