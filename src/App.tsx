@@ -1,7 +1,6 @@
 import './App.css';
 import { bitable } from '@lark-base-open/js-sdk';
 import { useRef, useState } from 'react';
-import templateUrl from './template.jpg';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -27,8 +26,11 @@ export default function App() {
 
     const templateImg = new Image();
 
-    // 这里直接使用 Vite 打包后的图片地址
-    templateImg.src = templateUrl;
+    // Vite 自动处理 src/template.jpg
+    templateImg.src = new URL(
+      './template.jpg',
+      import.meta.url
+    ).href;
 
     templateImg.onload = () => {
       canvas.width = templateImg.naturalWidth;
@@ -36,13 +38,14 @@ export default function App() {
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 绘制底图
+      // 绘制海报底图
       ctx.drawImage(templateImg, 0, 0);
 
       // 姓名样式
       ctx.fillStyle = '#8A0AA5';
       ctx.font =
         'bold 60px "PingFang SC", "Microsoft YaHei", sans-serif';
+
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
 
@@ -75,12 +78,14 @@ export default function App() {
         selection.tableId
       );
 
-      const nameField = await table.getFieldByName('姓名');
+      const nameField =
+        await table.getFieldByName('姓名');
 
-      const employeeName = await table.getCellString(
-        nameField.id,
-        selection.recordId
-      );
+      const employeeName =
+        await table.getCellString(
+          nameField.id,
+          selection.recordId
+        );
 
       if (!employeeName) {
         setMessage('当前记录的「姓名」为空');
@@ -89,7 +94,7 @@ export default function App() {
 
       setName(employeeName);
 
-      // 读取成功后直接生成海报
+      // 读取成功后直接生成
       drawPoster(employeeName);
 
     } catch (error) {
