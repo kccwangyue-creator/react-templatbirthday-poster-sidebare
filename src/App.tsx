@@ -1,6 +1,7 @@
 import './App.css';
 import { bitable } from '@lark-base-open/js-sdk';
 import { useRef, useState } from 'react';
+import templateUrl from './template.jpg';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -9,7 +10,6 @@ export default function App() {
   const [message, setMessage] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
 
-  // 生成海报
   const drawPoster = (employeeName: string) => {
     const canvas = canvasRef.current;
 
@@ -27,38 +27,28 @@ export default function App() {
 
     const templateImg = new Image();
 
-    templateImg.src = './template.jpg';
+    // 这里直接使用 Vite 打包后的图片地址
+    templateImg.src = templateUrl;
 
     templateImg.onload = () => {
-      // 使用模板原始尺寸
       canvas.width = templateImg.naturalWidth;
       canvas.height = templateImg.naturalHeight;
 
-      // 清空
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 画海报底图
+      // 绘制底图
       ctx.drawImage(templateImg, 0, 0);
 
-      // =========================
       // 姓名样式
-      // =========================
       ctx.fillStyle = '#8A0AA5';
-
       ctx.font =
         'bold 60px "PingFang SC", "Microsoft YaHei", sans-serif';
-
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
 
-      // 图怪兽给出的姓名区域：
-      // X = 352
-      // Y = 1009
-      // 高 = 76
-      // 所以 middle Y ≈ 1047
+      // 姓名位置
       ctx.fillText(employeeName, 352, 1047);
 
-      // 生成下载图片
       const url = canvas.toDataURL('image/png');
 
       setDownloadUrl(url);
@@ -66,35 +56,27 @@ export default function App() {
     };
 
     templateImg.onerror = () => {
-      setMessage(
-        'template.jpg 加载失败，请确认图片已经放在 public 文件夹里'
-      );
+      setMessage('生日海报模板加载失败');
     };
   };
 
-  // 从当前选中的多维表记录读取姓名
   const readCurrentName = async () => {
     try {
       setMessage('正在读取姓名...');
 
       const selection = await bitable.base.getSelection();
 
-      console.log('当前选中信息：', selection);
-
       if (!selection.tableId || !selection.recordId) {
         setMessage('请先在多维表里点击某一行');
         return;
       }
 
-      // 获取当前记录所在的数据表
       const table = await bitable.base.getTableById(
         selection.tableId
       );
 
-      // 找到名为「姓名」的字段
       const nameField = await table.getFieldByName('姓名');
 
-      // 获取当前记录的姓名
       const employeeName = await table.getCellString(
         nameField.id,
         selection.recordId
@@ -122,7 +104,6 @@ export default function App() {
     }
   };
 
-  // 手动生成
   const handleGenerate = () => {
     const employeeName = name.trim();
 
