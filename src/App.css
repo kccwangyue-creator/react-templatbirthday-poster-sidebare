@@ -1,12 +1,84 @@
-@import 'reset-css';
-
 .main {
-  padding: 1.5rem 1rem 1rem;
+  padding: 16px;
+  font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f7f7f7;
+  min-height: 100vh;
+  box-sizing: border-box;
 }
-.main h4 {
-  font-size: calc(1.275rem + 0.3vw);
+
+h2 {
+  margin: 0 0 16px 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f1f1f;
 }
-.main code {
-  color: #d63384;
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.nameInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  outline: none;
+  background: #fff;
+}
+
+.nameInput:focus {
+  border-color: #8A0AA5;
+  box-shadow: 0 0 0 2px rgba(138, 10, 165, 0.08);
+}
+
+.button {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: none;
+  border-radius: 8px;
+  background: #8A0AA5;
+  color: #fff;
+  cursor: pointer;
+}
+
+.button:hover {
+  opacity: 0.92;
+}
+
+.message {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #333;
+  line-height: 1.5;
+}
+
+.posterCanvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.downloadLink {
+  display: inline-block;
+  margin-top: 12px;
+  color: #8A0AA5;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.downloadLink:hover {
+  text-decoration: underline;
 }
