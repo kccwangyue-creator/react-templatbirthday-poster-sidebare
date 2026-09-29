@@ -2,262 +2,317 @@ import './App.css';
 import { bitable } from '@lark-base-open/js-sdk';
 import { useRef, useState } from 'react';
 
+const TEMPLATE_URL = new URL('./template.jpg', import.meta.url).href;
+
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const [name, setName] = useState('');
   const [message, setMessage] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
+  const [isBatchRunning, setIsBatchRunning] = useState(false);
 
-  const drawPoster = (
-    employeeName: string,
-    recordId?: string,
-    tableId?: string
-  ) => {
-    const canvas = canvasRef.current;
+  // 把各种可能的姓名值统一转成字符串
+  const normalizeNameValue = (value: any): string => {
+    if (value == null) return '';
 
-    if (!canvas) {
-      setMessage('没有找到 Canvas');
-      return;
+    if (typeof value === 'string') {
+      return value.trim();
     }
 
-    const ctx = canvas.getContext('2d');
-
-    if (!ctx) {
-      setMessage('Canvas 初始化失败');
-      return;
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => {
+          if (typeof item === 'string') return item;
+          if (item?.text) return item.text;
+          if (item?.name) return item.name;
+          return '';
+        })
+        .join('')
+        .trim();
     }
 
-    const templateImg = new Image();
+    if (typeof value === 'object') {
+      if (typeof value.text === 'string') return value.text.trim();
+      if (typeof value.name === 'string') return value.name.trim();
+    }
 
-    templateImg.src = new URL(
-      './template.jpg',
-      import.meta.url
-    ).href;
-
-    templateImg.onload = () => {
-      canvas.width = templateImg.naturalWidth;
-      canvas.height = templateImg.naturalHeight;
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(templateImg, 0, 0);
-
-      ctx.fillStyle = '#8A0AA5';
-      ctx.font =
-        'bold 60px "PingFang SC", "Microsoft YaHei", sans-serif';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-
-      ctx.fillText(employeeName, 352, 1047);
-
-      const url = canvas.toDataURL('image/png');
-      setDownloadUrl(url);
-
-      if (recordId && tableId) {
-        uploadPosterToBase(
-          canvas,
-          employeeName,
-          recordId,
-          tableId
-        );
-      } else {
-        setMessage(`已生成 ${employeeName} 的生日海报`);
-      }
-    };
-
-    templateImg.onerror = () => {
-      setMessage('生日海报模板加载失败');
-    };
+    return String(value).trim();
   };
 
-  const uploadPosterToBase = async (
-    canvas: HTMLCanvasElement,
-    employeeName: string,
-    recordId: string,
-    tableId: string
-  ) => {
-    try {
-      setMessage('正在上传海报到多维表...');
+  // 判断附件字段是否已有值
+  const hasAttachmentValue = (value: any): boolean => {
+    if (!value) return false;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'string') return value.trim() !== '';
+    if (typeof value === 'object') return Object.keys(value).length > 0;
+    return false;
+  };
 
-      const blob = await new Promise<Blob | null>((resolve) => {
-        canvas.toBlob(resolve, 'image/png');
-      });
+  // 画海报 + 导出 blob/dataUrl
+  const renderPoster = async (
+    employeeName: string
+  ): Promise<{ blob: Blob; dataUrl: string }> => {
+    return new Promise((resolve, reject) => {
+      const canvas = canvasRef.current;
 
-      if (!blob) {
-        setMessage('生成图片文件失败');
+      if (!canvas) {
+        reject(new Error('没有找到 Canvas'));
         return;
       }
 
-      const file = new File(
-        [blob],
-        `生日海报-${employeeName}.png`,
-        { type: 'image/png' }
-      );
+      const ctx = canvas.getContext('2d');
 
-      const tokens = await bitable.base.batchUploadFile([file]);
-
-      if (!tokens || !tokens[0]) {
-        setMessage('文件上传失败，没有获取到 token');
+      if (!ctx) {
+        reject(new Error('Canvas 初始化失败'));
         return;
       }
 
-      const token = tokens[0];
+      const templateImg = new Image();
+      templateImg.src = TEMPLATE_URL;
 
-      const table =
-        await bitable.base.getTableById(tableId);
+      templateImg.onload = () => {
+        canvas.width = templateImg.naturalWidth;
+        canvas.height = templateImg.naturalHeight;
 
-      const posterField =
-        await table.getFieldByName('海报图');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(templateImg, 0, 0);
 
-      await posterField.setValue(
-        recordId,
-        [
-          {
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            token,
-            timeStamp: Date.now(),
+        // 文字样式
+        ctx.fillStyle = '#8A0AA5';
+        ctx.font =
+          'bold 60px "PingFang SC", "Microsoft YaHei", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+
+        // 姓名位置
+        ctx.fillText(employeeName, 352, 1047);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('海报图片导出失败'));
+              return;
+            }
+
+            const dataUrl = canvas.toDataURL('image/png');
+            resolve({ blob, dataUrl });
           },
-        ]
-      );
+          'image/png',
+          1
+        );
+      };
 
-      setMessage(
-        `✅ ${employeeName} 的海报已写入「海报图」`
-      );
-
-    } catch (error) {
-      console.error('上传海报失败：', error);
-
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : String(error);
-
-      setMessage(
-        `❌ 写回失败：${errorMessage}`
-      );
-    }
+      templateImg.onerror = () => {
+        reject(new Error('生日海报模板加载失败'));
+      };
+    });
   };
 
-  const readCurrentName = async () => {
+  // 把图片文件写回「海报图」
+  const writePosterToRecord = async (
+    posterField: any,
+    recordId: string,
+    employeeName: string,
+    blob: Blob
+  ) => {
+    const file = new File(
+      [blob],
+      `生日海报-${employeeName}.png`,
+      {
+        type: 'image/png',
+      }
+    );
+
+    const attachmentCell = await posterField.getCell(recordId);
+    await attachmentCell.setValue(file);
+  };
+
+  // 单条：生成并写回
+  const generateAndWriteOneRecord = async (
+    table: any,
+    posterField: any,
+    recordId: string,
+    employeeName: string
+  ) => {
+    const { blob, dataUrl } = await renderPoster(employeeName);
+
+    setName(employeeName);
+    setDownloadUrl(dataUrl);
+
+    await writePosterToRecord(
+      posterField,
+      recordId,
+      employeeName,
+      blob
+    );
+  };
+
+  // 读取当前选中行，生成并写回
+  const readCurrentNameAndGenerate = async () => {
     try {
-      setMessage('正在读取姓名...');
+      setMessage('正在读取当前行...');
 
-      const selection =
-        await bitable.base.getSelection();
+      const selection = await bitable.base.getSelection();
 
-      if (
-        !selection.tableId ||
-        !selection.recordId
-      ) {
+      if (!selection.tableId || !selection.recordId) {
         setMessage('请先在多维表里点击某一行');
         return;
       }
 
-      const table =
-        await bitable.base.getTableById(
-          selection.tableId
-        );
+      const table = await bitable.base.getTableById(selection.tableId);
+      const nameField = await table.getFieldByName('姓名');
+      const posterField = await table.getFieldByName('海报图');
 
-      const nameField =
-        await table.getFieldByName('姓名');
+      const employeeName = await table.getCellString(
+        nameField.id,
+        selection.recordId
+      );
 
-      const employeeName =
-        await table.getCellString(
-          nameField.id,
-          selection.recordId
-        );
-
-      if (!employeeName) {
+      if (!employeeName || !employeeName.trim()) {
         setMessage('当前记录的「姓名」为空');
         return;
       }
 
-      setName(employeeName);
+      setMessage(`正在为 ${employeeName} 生成海报...`);
 
-      drawPoster(
-        employeeName,
+      await generateAndWriteOneRecord(
+        table,
+        posterField,
         selection.recordId,
-        selection.tableId
+        employeeName.trim()
       );
 
+      setMessage(`✅ ${employeeName} 的海报已生成并写入「海报图」`);
     } catch (error) {
-      console.error('读取姓名失败：', error);
+      console.error('单条生成失败：', error);
 
       const errorMessage =
-        error instanceof Error
-          ? error.message
-          : String(error);
+        error instanceof Error ? error.message : String(error);
 
-      setMessage(
-        `读取姓名失败：${errorMessage}`
-      );
+      setMessage(`❌ 单条生成失败：${errorMessage}`);
     }
   };
 
-  const testWrite = async () => {
+  // 仅生成预览，不写回
+  const handlePreviewOnly = async () => {
     try {
-      setMessage('正在测试写入...');
+      const employeeName = name.trim();
 
-      const selection =
-        await bitable.base.getSelection();
-
-      if (
-        !selection.tableId ||
-        !selection.recordId
-      ) {
-        setMessage('请先选中一条记录');
+      if (!employeeName) {
+        setMessage('请输入员工姓名');
         return;
       }
 
-      const table =
-        await bitable.base.getTableById(
-          selection.tableId
-        );
+      setMessage(`正在生成 ${employeeName} 的预览...`);
 
-      const testField =
-        await table.getFieldByName('测试状态');
+      const { dataUrl } = await renderPoster(employeeName);
+      setDownloadUrl(dataUrl);
 
-      await testField.setValue(
-        selection.recordId,
-        'OK'
-      );
-
-      setMessage('✅ 测试写入成功');
-
+      setMessage(`✅ 已生成 ${employeeName} 的预览海报`);
     } catch (error) {
-      console.error('测试写入失败：', error);
+      console.error('预览生成失败：', error);
 
       const errorMessage =
-        error instanceof Error
-          ? error.message
-          : String(error);
+        error instanceof Error ? error.message : String(error);
 
-      setMessage(
-        `❌ 测试写入失败：${errorMessage}`
-      );
+      setMessage(`❌ 预览生成失败：${errorMessage}`);
     }
   };
 
-  const handleGenerate = () => {
-    const employeeName = name.trim();
+  // 批量生成：只处理 姓名不为空 + 海报图为空 的记录
+  const batchGenerateMissingPosters = async () => {
+    try {
+      setIsBatchRunning(true);
+      setMessage('正在扫描需要生成海报的记录...');
 
-    if (!employeeName) {
-      setMessage('请输入员工姓名');
-      return;
+      const table = await bitable.base.getActiveTable();
+      const nameField = await table.getFieldByName('姓名');
+      const posterField = await table.getFieldByName('海报图');
+
+      let pageToken: any = undefined;
+      const targets: Array<{ recordId: string; employeeName: string }> = [];
+
+      while (true) {
+        const res = await table.getRecordsByPage({
+          pageSize: 200,
+          pageToken,
+        });
+
+        const records = res.records || [];
+
+        for (const record of records) {
+          const recordId = record.recordId;
+          const nameValue = record.fields?.[nameField.id];
+          const posterValue = record.fields?.[posterField.id];
+
+          const employeeName = normalizeNameValue(nameValue);
+          const hasPoster = hasAttachmentValue(posterValue);
+
+          if (!employeeName) continue;
+          if (hasPoster) continue;
+
+          targets.push({
+            recordId,
+            employeeName,
+          });
+        }
+
+        if (!res.hasMore) break;
+        pageToken = res.pageToken;
+      }
+
+      if (targets.length === 0) {
+        setMessage('✅ 没有需要批量生成的记录（可能都已有海报，或姓名为空）');
+        setIsBatchRunning(false);
+        return;
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (let i = 0; i < targets.length; i++) {
+        const item = targets[i];
+
+        try {
+          setMessage(
+            `正在处理 ${i + 1}/${targets.length}：${item.employeeName}`
+          );
+
+          await generateAndWriteOneRecord(
+            table,
+            posterField,
+            item.recordId,
+            item.employeeName
+          );
+
+          successCount += 1;
+        } catch (error) {
+          console.error(`处理 ${item.employeeName} 失败：`, error);
+          failCount += 1;
+        }
+      }
+
+      setMessage(
+        `✅ 批量完成：成功 ${successCount} 条，失败 ${failCount} 条，共 ${targets.length} 条`
+      );
+    } catch (error) {
+      console.error('批量生成失败：', error);
+
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      setMessage(`❌ 批量生成失败：${errorMessage}`);
+    } finally {
+      setIsBatchRunning(false);
     }
-
-    drawPoster(employeeName);
   };
 
   return (
     <main className="main">
-
       <h2>生日海报生成器 🎂</h2>
 
       <div className="controls">
-
         <input
           className="nameInput"
           type="text"
@@ -268,32 +323,30 @@ export default function App() {
 
         <button
           className="button"
-          onClick={readCurrentName}
+          onClick={readCurrentNameAndGenerate}
+          disabled={isBatchRunning}
         >
           读取当前行并生成海报
         </button>
 
         <button
           className="button"
-          onClick={testWrite}
+          onClick={batchGenerateMissingPosters}
+          disabled={isBatchRunning}
         >
-          测试写入
+          {isBatchRunning ? '批量生成中...' : '批量生成缺失海报'}
         </button>
 
         <button
           className="button"
-          onClick={handleGenerate}
+          onClick={handlePreviewOnly}
+          disabled={isBatchRunning}
         >
           仅生成预览
         </button>
-
       </div>
 
-      {message && (
-        <div className="message">
-          {message}
-        </div>
-      )}
+      {message && <div className="message">{message}</div>}
 
       <canvas
         ref={canvasRef}
@@ -306,12 +359,11 @@ export default function App() {
         <a
           className="downloadLink"
           href={downloadUrl}
-          download={`生日海报-${name}.png`}
+          download={`生日海报-${name || '员工'}.png`}
         >
-          下载海报
+          下载当前预览海报
         </a>
       )}
-
     </main>
   );
 }
