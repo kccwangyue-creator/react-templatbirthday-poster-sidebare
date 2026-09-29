@@ -9,7 +9,12 @@ export default function App() {
   const [message, setMessage] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
 
-  const drawPoster = (employeeName: string) => {
+  // 生成海报，并可选择是否写回多维表
+  const drawPoster = (
+    employeeName: string,
+    recordId?: string,
+    tableId?: string
+  ) => {
     const canvas = canvasRef.current;
 
     if (!canvas) {
@@ -26,7 +31,6 @@ export default function App() {
 
     const templateImg = new Image();
 
-    // Vite 自动处理 src/template.jpg
     templateImg.src = new URL(
       './template.jpg',
       import.meta.url
@@ -36,9 +40,14 @@ export default function App() {
       canvas.width = templateImg.naturalWidth;
       canvas.height = templateImg.naturalHeight;
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
 
-      // 绘制海报底图
+      // 画底图
       ctx.drawImage(templateImg, 0, 0);
 
       // 姓名样式
@@ -52,10 +61,23 @@ export default function App() {
       // 姓名位置
       ctx.fillText(employeeName, 352, 1047);
 
+      // 下载预览
       const url = canvas.toDataURL('image/png');
-
       setDownloadUrl(url);
-      setMessage(`已生成 ${employeeName} 的生日海报`);
+
+      // 如果有当前记录信息，就自动回写
+      if (recordId && tableId) {
+        uploadPosterToBase(
+          canvas,
+          employeeName,
+          recordId,
+          tableId
+        );
+      } else {
+        setMessage(
+          `已生成 ${employeeName} 的生日海报`
+        );
+      }
     };
 
     templateImg.onerror = () => {
@@ -63,20 +85,95 @@ export default function App() {
     };
   };
 
+  // 将 Canvas 转成 File，然后写回「海报图」
+  const uploadPosterToBase = async (
+    canvas: HTMLCanvasElement,
+    employeeName: string,
+    recordId: string,
+    tableId: string
+  ) => {
+    try {
+      setMessage('正在上传海报到多维表...');
+
+      // Canvas -> Blob
+      const blob = await new Promise<Blob | null>(
+        (resolve) => {
+          canvas.toBlob(
+            resolve,
+            'image/png',
+            1
+          );
+        }
+      );
+
+      if (!blob) {
+        setMessage('生成图片文件失败');
+        return;
+      }
+
+      // Blob -> File
+      const file = new File(
+        [blob],
+        `生日海报-${employeeName}.png`,
+        {
+          type: 'image/png',
+        }
+      );
+
+      // 获取表
+      const table =
+        await bitable.base.getTableById(tableId);
+
+      // 找附件字段「海报图」
+      const posterField =
+        await table.getFieldByName('海报图');
+
+      // 直接写入附件字段
+      await posterField.setValue(
+        recordId,
+        file
+      );
+
+      setMessage(
+        `✅ ${employeeName} 的海报已生成并写入「海报图」`
+      );
+
+    } catch (error) {
+      console.error('上传海报失败：', error);
+
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : String(error);
+
+      setMessage(
+        `海报生成成功，但写入多维表失败：${errorMessage}`
+      );
+    }
+  };
+
+  // 读取当前行姓名
   const readCurrentName = async () => {
     try {
       setMessage('正在读取姓名...');
 
-      const selection = await bitable.base.getSelection();
+      const selection =
+        await bitable.base.getSelection();
 
-      if (!selection.tableId || !selection.recordId) {
-        setMessage('请先在多维表里点击某一行');
+      if (
+        !selection.tableId ||
+        !selection.recordId
+      ) {
+        setMessage(
+          '请先在多维表里点击某一行'
+        );
         return;
       }
 
-      const table = await bitable.base.getTableById(
-        selection.tableId
-      );
+      const table =
+        await bitable.base.getTableById(
+          selection.tableId
+        );
 
       const nameField =
         await table.getFieldByName('姓名');
@@ -88,32 +185,47 @@ export default function App() {
         );
 
       if (!employeeName) {
-        setMessage('当前记录的「姓名」为空');
+        setMessage(
+          '当前记录的「姓名」为空'
+        );
         return;
       }
 
       setName(employeeName);
 
-      // 读取成功后直接生成
-      drawPoster(employeeName);
+      // 自动生成 + 自动写回
+      drawPoster(
+        employeeName,
+        selection.recordId,
+        selection.tableId
+      );
 
     } catch (error) {
-      console.error('读取姓名失败：', error);
+      console.error(
+        '读取姓名失败：',
+        error
+      );
 
       const errorMessage =
         error instanceof Error
           ? error.message
           : String(error);
 
-      setMessage(`读取姓名失败：${errorMessage}`);
+      setMessage(
+        `读取姓名失败：${errorMessage}`
+      );
     }
   };
 
+  // 手动生成，只生成，不写回
   const handleGenerate = () => {
-    const employeeName = name.trim();
+    const employeeName =
+      name.trim();
 
     if (!employeeName) {
-      setMessage('请输入员工姓名');
+      setMessage(
+        '请输入员工姓名'
+      );
       return;
     }
 
@@ -132,21 +244,23 @@ export default function App() {
           type="text"
           placeholder="请输入员工姓名"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) =>
+            setName(e.target.value)
+          }
         />
 
         <button
           className="button"
           onClick={readCurrentName}
         >
-          读取当前行姓名
+          读取当前行并生成海报
         </button>
 
         <button
           className="button"
           onClick={handleGenerate}
         >
-          生成海报
+          仅生成预览
         </button>
 
       </div>
