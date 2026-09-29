@@ -27,7 +27,7 @@ export default function App() {
 
     const templateImg = new Image();
 
-    templateImg.src = '/template.jpg';
+    templateImg.src = './template.jpg';
 
     templateImg.onload = () => {
       // 使用模板原始尺寸
